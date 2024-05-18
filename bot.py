@@ -168,8 +168,6 @@ class Bot:
             ),
         )
         '''
-        self.pattern = mirror(rle_to_pattern('pufferfish.rle'), 'y')
-        return 
         self.pattern = concatenate(
             mirror(rle_to_pattern('pufferfish.rle'), 'y'),
             shift(
@@ -206,11 +204,6 @@ class Bot:
         -------
         An object containing the x and y coordinates of the new cells.
         """
-        pattern = self.center(rle_to_pattern('smallspacefiller.rle'))
-        if tokens >= len(pattern):
-            return pattern
-        return
-
         if iteration < 500:
             return
 
