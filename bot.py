@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
+import os
+import random
 
 from typing import Optional, Tuple
 
@@ -6,8 +8,98 @@ import numpy as np
 
 from cholerama import Positions, helpers
 
-AUTHOR = "YeastieBoys"  # This is your team name
+AUTHOR = "Frothing puffer"  # This is your team name
 SEED = None  # Set this to a value to make runs reproducible
+
+
+def concatenate(*ps):
+    return Positions(
+        x=np.concatenate([p.x for p in ps]),
+        y=np.concatenate([p.y for p in ps])
+    )
+
+
+def rotate(p):
+    return mirror(Positions(x=p.y, y=p.x), 'x')
+
+
+def random_orientation(p):
+    for i in range(random.randint(0, 3)):
+        p = rotate(p)
+    if random.randint(0, 1):
+        p = mirror(p, 'x')
+    if random.randint(0, 1):
+        p = mirror(p, 'y')
+    return p
+
+
+def mirror(p, dim):
+    m = max(np.max(p.x), np.max(p.y))
+    if dim == 'x':
+        return Positions(x=m - p.x, y=p.y)
+    if dim == 'y':
+        return Positions(y=m - p.y, x=p.x)
+    assert False
+
+
+def shift(s, p):
+    return Positions(s[0] + p.x, s[1] + p.y)
+
+
+def local_path(fname):
+    return os.path.join(os.path.dirname(__file__), fname)
+
+
+def plaintext_to_pattern(fname):
+    with open(local_path(fname)) as f:
+        lines = f.readlines()
+    lines = [line for line in lines if not line.startswith('!')]
+    nonzero = sum(c == 'O' for line in lines for c in line)
+    x = np.empty(nonzero, dtype='int')
+    y = np.empty(nonzero, dtype='int')
+    k = 0
+    for i, line in enumerate(lines):
+        for j, c in enumerate(line):
+            if c == 'O':
+                y[k] = len(lines) - i - 1
+                x[k] = j
+                k += 1
+    return Positions(x=x, y=y)
+
+
+def rle_to_pattern(fname):
+    with open(local_path(fname)) as f:
+        lines = f.readlines()
+    lines = [line for line in lines if not line.startswith('#')]
+
+    xs = []
+    ys = []
+    num = ''
+    x = 0
+    y = 0
+    for line in lines[1:]:
+        for c in line:
+            if c in '0123456789':
+                num += c
+            if c == 'b':
+                x += 1 if num == '' else int(num)
+                num = ''
+            elif c == 'o':
+                for i in range(1 if num == '' else int(num)):
+                    xs.append(x)
+                    ys.append(y)
+                    x += 1
+                num = ''
+            elif c == '$':
+                y += 1 if num == '' else int(num)
+                num = ''
+                x = 0
+            elif c == '!':
+                return Positions(
+                    x=np.array(xs, dtype='int'),
+                    y=np.array(ys, dtype='int')
+                )
+    assert False
 
 
 class Bot:
@@ -45,13 +137,54 @@ class Bot:
 
         self.rng = np.random.default_rng(SEED)
 
-        # If we make the pattern too sparse, it just dies quickly
-        xy = self.rng.integers(0, 12, size=(2, 100))
-        self.pattern = Positions(
-            x=xy[1] + patch_size[1] // 2, y=xy[0] + patch_size[0] // 2
+        '''
+        self.pattern = concatenate(
+            mirror(rle_to_pattern('gosperglidergun.rle'), 'y'),
+            shift(
+                (self.patch_size[0] - 40, self.patch_size[1] - 40),
+                mirror(rotate(rotate(rle_to_pattern('gosperglidergun.rle'))), 'y'),
+            ),
         )
-        # The pattern can also be just an image (0=white, 1=black)
-        # self.pattern = "mypattern.png"
+        self.pattern = concatenate(
+                mirror(rle_to_pattern('blinkerpuffer1.rle'), 'y'),
+            shift(
+                (self.patch_size[0] - 40, self.patch_size[1] - 40),
+                mirror(rotate(rotate(rle_to_pattern('blinkerpuffer1.rle'))), 'y'),
+            ),
+        )
+        self.pattern = self.center(rle_to_pattern('backrake1nohwsspuffer.rle'))
+        self.pattern = concatenate(
+                mirror(rle_to_pattern('pufferfish.rle'), 'y'),
+            shift(
+                (self.patch_size[0] - 40, self.patch_size[1] - 40),
+                mirror(rotate(rotate(rle_to_pattern('pufferfish.rle'))), 'y'),
+            ),
+        )
+        self.pattern = concatenate(
+            mirror(rle_to_pattern('blocklayingswitchenginepredecessor.rle'), 'y'),
+            shift(
+                (self.patch_size[0] - 40, self.patch_size[1] - 40),
+                mirror(rotate(rotate(rle_to_pattern('blocklayingswitchenginepredecessor.rle'))), 'y'),
+            ),
+        )
+        '''
+        self.pattern = concatenate(
+            mirror(rle_to_pattern('pufferfish.rle'), 'y'),
+            shift(
+                (self.patch_size[0] - 40, self.patch_size[1] - 40),
+                mirror(rotate(rotate(rle_to_pattern('pufferfish.rle'))), 'y'),
+            ),
+            self.center(rle_to_pattern('10cellinfinitegrowth.rle'))
+        )
+
+
+        
+
+    def center(self, pattern):
+        return shift(
+            (self.patch_size[1] // 2, self.patch_size[0] // 2),
+            pattern
+        )
 
     def iterate(
         self, iteration: int, board: np.ndarray, patch: np.ndarray, tokens: int
@@ -74,14 +207,21 @@ class Bot:
         -------
         An object containing the x and y coordinates of the new cells.
         """
-        if tokens >= 5:
+        if iteration < 500:
+            return
+
+        #pattern = random_orientation(rle_to_pattern('gosperglidergun.rle'))
+        pattern = random_orientation(rle_to_pattern('10cellinfinitegrowth.rle'))
+
+        if tokens >= len(pattern):
             # Pick a random empty region of size 3x3 inside my patch
-            empty_regions = helpers.find_empty_regions(patch, (3, 3))
+            empty_regions = helpers.find_empty_regions(patch, (36, 36))
             nregions = len(empty_regions)
             if nregions == 0:
                 return None
-            # Make a glider
-            ind = self.rng.integers(0, nregions)
-            x = np.array([1, 2, 0, 1, 2]) + empty_regions[ind, 1]
-            y = np.array([2, 1, 0, 0, 0]) + empty_regions[ind, 0]
-            return Positions(x=x, y=y)
+
+            region = empty_regions[self.rng.integers(0, nregions)]
+            return shift(
+                (region[1], region[0]),
+                pattern,
+            )
